@@ -6,11 +6,13 @@ jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
-      contents: read          # actions/checkout 用
-      packages: write         # GHCR に push するため
+      contents: read
+      packages: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v4   # ← token 指定は不要（GITHUB_TOKEN 自動注入）
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}   # ← 明示
 
       - name: Set up Buildx
         uses: docker/setup-buildx-action@v3
@@ -20,7 +22,7 @@ jobs:
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}  # ← 自動で用意されるトークン
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push (amd64)
         uses: docker/build-push-action@v5
