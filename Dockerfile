@@ -1,24 +1,32 @@
 FROM ubuntu:22.04
-
 ENV DEBIAN_FRONTEND=noninteractive
-# 依存 & 32bit有効化
+
+# 基本ツール＋32bit対応＋winetricks
 RUN dpkg --add-architecture i386 \
  && apt-get update \
  && apt-get install -y --no-install-recommends \
       ca-certificates curl gnupg2 locales \
-      cabextract p7zip-full unzip \
-      winetricks \
+      cabextract p7zip-full unzip winetricks \
  && locale-gen en_US.UTF-8
 
-# Wine 8.x stable を導入（jammy）
-RUN mkdir -p /etc/apt/keyrings \
- && curl -fsSL https://dl.winehq.org/wine-builds/winehq.key -o /etc/apt/keyrings/winehq.key \
- && printf "Types: deb\nURIs: https://dl.winehq.org/wine-builds/ubuntu/\nSuites: jammy\nComponents: main\nSigned-By: /etc/apt/keyrings/winehq.key\n" \
-      > /etc/apt/sources.list.d/winehq.sources \
- && apt-get update \
- && apt-get install -y --no-install-recommends \
-      winehq-stable=8.0.4~jammy-1 || apt-get install -y --no-install-recommends winehq-stable \
- && rm -rf /var/lib/apt/lists/*
+# ---- Wine 8.0.4 を .deb で明示インストール（repoは追加しない）----
+ARG WVER=8.0.4~jammy-1
+WORKDIR /tmp/wine8
+RUN set -eux; \
+  base="https://dl.winehq.org/wine-builds/ubuntu/pool/main/w/wine-stable"; \
+  curl -fLO "$base/wine-stable-amd64_${WVER}_amd64.deb"; \
+  curl -fLO "$base/wine-stable-i386_${WVER}_i386.deb"; \
+  curl -fLO "$base/wine-stable_${WVER}_amd64.deb"; \
+  curl -fLO "$base/winehq-stable_${WVER}_amd64.deb"; \
+  apt-get update; \
+  # 依存は apt に解決させるが、インストール対象は 8.0.4 の .deb だけ
+  apt-get install -y --no-install-recommends \
+    ./wine-stable-amd64_${WVER}_amd64.deb \
+    ./wine-stable-i386_${WVER}_i386.deb \
+    ./wine-stable_${WVER}_amd64.deb \
+    ./winehq-stable_${WVER}_amd64.deb; \
+  apt-mark hold winehq-stable wine-stable wine-stable-amd64 wine-stable-i386; \
+  rm -rf /var/lib/apt/lists/* /tmp/wine8
 
 # ランタイムユーザー
 ENV WINE_USER=wine WINE_UID=1000
@@ -26,27 +34,17 @@ RUN useradd -u $WINE_UID -d /home/wine -m -s /bin/bash $WINE_USER
 USER wine
 WORKDIR /home/wine
 
-# 64bitプレフィックスを既定に（実行時に初期化する）
+# 既定は win64（初期化は実行時に行う）
 ENV WINEARCH=win64
 ENV WINEPREFIX=/home/wine/.wine64
 ENV WINEDEBUG=-all
-
-# 互換シンボリック（後段が .wine を前提にしていても動くように）
 RUN ln -sfn "$WINEPREFIX" /home/wine/.wine || true
 
-# スクリプト類
+# あなたのファイル類
 COPY extra/host-webbrowser /usr/local/bin/xdg-open
 COPY extra/live-mtgo /usr/local/bin/live-mtgo
 COPY extra/mtgo.sh /usr/local/bin/mtgo
+ADD --chown=wine:wine https://mtgo.patch.daybreakgames.com/patch/mtg/live/client/setup.exe?v=8 /opt/mtgo/mtgo.exe
 
-# MTGO セットアップ（実行時に使う）
-ADD --chown=wine:wine \
-  https://mtgo.patch.daybreakgames.com/patch/mtg/live/client/setup.exe?v=8 \
-  /opt/mtgo/mtgo.exe
-
-# ホストからレジストリをマウントする時の足場（WINEPREFIX対応）
-RUN mkdir -p "$WINEPREFIX/host" \
- && ln -sf "$WINEPREFIX/host" "$WINEPREFIX/drive_c/users/wine/Documents" || true
-
-# ここで wineboot / winetricks は実行しない（実行時にやる）
+# 実行時初期化に任せる（ビルド中は wineboot / winetricks を走らせない）
 CMD ["mtgo"]
