@@ -53,11 +53,15 @@ ADD --chown=wine:wine https://mtgo.patch.daybreakgames.com/patch/mtg/live/client
 
 USER wine
 
-# hack to allow mounting of user.reg and system.reg from host
-# see https://github.com/pauleve/docker-mtgo/issues/6
-RUN cd .wine && mkdir host \
-    && mv user.reg system.reg host/ \
-    && ln -s host/*.reg .
+# hack to allow mounting of user.reg and system.reg from host (WINEPREFIX対応)
+ENV WINEPREFIX=${WINEPREFIX:-/home/wine/.wine64}
+RUN set -eux; \
+    cd "$WINEPREFIX"; \
+    mkdir -p host; \
+    # reg が無い場合でも失敗させない
+    if [ -f user.reg ]; then mv -f user.reg host/ || true; fi; \
+    if [ -f system.reg ]; then mv -f system.reg host/ || true; fi; \
+    ln -sf host/*.reg . || true
 RUN mkdir -p \
     /home/wine/.wine/drive_c/users/wine/Documents\
     /home/wine/.wine/host/wine/Documents
