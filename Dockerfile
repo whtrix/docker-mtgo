@@ -9,17 +9,23 @@ RUN dpkg --add-architecture i386 \
       cabextract p7zip-full unzip winetricks \
  && locale-gen en_US.UTF-8
 
-# ---- Wine 8.0.4 を .deb で明示インストール（repoは追加しない）----
-ARG WVER=8.0.4~jammy-1
+# --- Wine 8.x (stable) を「その時点で存在する最新版」でインストール ---
+# 重要: winehq の APT レポは追加しない（追加すると 10.x に上がる）
 WORKDIR /tmp/wine8
 RUN set -eux; \
-  base="https://dl.winehq.org/wine-builds/ubuntu/pool/main/w/wine-stable"; \
-  curl -fLO "$base/wine-stable-amd64_${WVER}_amd64.deb"; \
-  curl -fLO "$base/wine-stable-i386_${WVER}_i386.deb"; \
-  curl -fLO "$base/wine-stable_${WVER}_amd64.deb"; \
-  curl -fLO "$base/winehq-stable_${WVER}_amd64.deb"; \
+  SUITE=jammy; \
+  BASE="https://dl.winehq.org/wine-builds/ubuntu/pool/main/w/wine-stable"; \
+  # 一覧から '8.' を含む最新版のバージョン名を拾う（例: 8.0.6~jammy-1）
+  WVER="$(curl -fsSL "$BASE/" \
+          | grep -oE "winehq-stable_8[^\"]+_${SUITE}-1_amd64\.deb" \
+          | sed "s/^winehq-stable_//; s/_${SUITE}-1_amd64\.deb$//" \
+          | sort -V | tail -1)~${SUITE}-1"; \
+  echo "Picked Wine stable version: $WVER"; \
+  for pkg in wine-stable-amd64 wine-stable-i386 wine-stable winehq-stable; do \
+    arch=amd64; [ "$pkg" = "wine-stable-i386" ] && arch=i386; \
+    curl -fLO "$BASE/${pkg}_${WVER}_${arch}.deb"; \
+  done; \
   apt-get update; \
-  # 依存は apt に解決させるが、インストール対象は 8.0.4 の .deb だけ
   apt-get install -y --no-install-recommends \
     ./wine-stable-amd64_${WVER}_amd64.deb \
     ./wine-stable-i386_${WVER}_i386.deb \
