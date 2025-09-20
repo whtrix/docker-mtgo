@@ -1,4 +1,23 @@
-FROM panard/wine:9.14-wow64
+FROM ubuntu:22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+RUN dpkg --add-architecture i386 \
+ && apt-get update \
+ && apt-get install -y --no-install-recommends \
+      ca-certificates curl gnupg2 locales \
+      cabextract p7zip-full unzip \
+ && locale-gen en_US.UTF-8
+
+# WineHQ 公式の "stable" (8.x) を入れる
+RUN mkdir -p /etc/apt/keyrings \
+ && curl -fsSL https://dl.winehq.org/wine-builds/winehq.key -o /etc/apt/keyrings/winehq.key \
+ && printf "Types: deb\nURIs: https://dl.winehq.org/wine-builds/ubuntu/\nSuites: jammy\nComponents: main\nSigned-By: /etc/apt/keyrings/winehq.key\n" \
+      > /etc/apt/sources.list.d/winehq.sources \
+ && apt-get update \
+ && apt-get install -y --no-install-recommends \
+      winehq-stable=8.0.4~jammy-1 || apt-get install -y --no-install-recommends winehq-stable \
+ && rm -rf /var/lib/apt/lists/*
+
 CMD mtgo
 
 ENV WINE_USER wine
@@ -9,21 +28,6 @@ WORKDIR /home/wine
 
 COPY extra/host-webbrowser /usr/local/bin/xdg-open
 COPY extra/live-mtgo /usr/local/bin/live-mtgo
-
-# ---- Wine 8.x stable を入れる（stagingを使っている場合の置き換え） ----
-USER root
-RUN dpkg --add-architecture i386 && \
-    mkdir -p /etc/apt/keyrings && \
-    curl -fsSL https://dl.winehq.org/wine-builds/winehq.key \
-      -o /etc/apt/keyrings/winehq.key && \
-    printf "Types: deb\nURIs: https://dl.winehq.org/wine-builds/ubuntu/\nSuites: jammy\nComponents: main\nSigned-By: /etc/apt/keyrings/winehq.key\n" \
-      > /etc/apt/sources.list.d/winehq.sources && \
-    apt-get update && \
-    # バージョン固定（失敗したら最新版の stable を入れるフォールバック）
-    apt-get install -y --no-install-recommends \
-      winehq-stable=8.0.4~jammy-1 || \
-    (apt-get update && apt-get install -y --no-install-recommends winehq-stable) && \
-    rm -rf /var/lib/apt/lists/*
 
 USER wine
 
