@@ -1,14 +1,17 @@
 FROM debian:bookworm-slim
 
 ENV DEBIAN_FRONTEND=noninteractive
-# 32bit 有効化＋最低限のユーティリティ
+
+# 32bit 有効化 & 必要パッケージ
 RUN dpkg --add-architecture i386 \
+ # (念のため contrib/non-free を有効化。既に入っていれば何もしません)
+ && sed -i 's/ main/ main contrib non-free non-free-firmware/' /etc/apt/sources.list \
  && apt-get update \
  && apt-get install -y --no-install-recommends \
       ca-certificates curl gnupg locales \
       cabextract p7zip-full unzip \
       winetricks \
-      wine wine32 wine64 \
+      wine wine64 wine32:i386 \
  && locale-gen en_US.UTF-8 \
  && rm -rf /var/lib/apt/lists/*
 
@@ -18,7 +21,7 @@ RUN useradd -u $WINE_UID -d /home/wine -m -s /bin/bash $WINE_USER
 USER wine
 WORKDIR /home/wine
 
-# 既定は win64（初期化は実行時に）
+# 既定は win64（初期化は実行時）
 ENV WINEARCH=win64
 ENV WINEPREFIX=/home/wine/.wine64
 ENV WINEDEBUG=-all
@@ -32,5 +35,5 @@ ADD --chown=wine:wine \
   https://mtgo.patch.daybreakgames.com/patch/mtg/live/client/setup.exe?v=8 \
   /opt/mtgo/mtgo.exe
 
-# 実行時に初期化するので CMD だけ
+# 初期化は実行時に行う（ビルド中は走らせない）
 CMD ["mtgo"]
